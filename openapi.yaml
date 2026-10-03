@@ -1,0 +1,264 @@
+openapi: 3.1.0
+info:
+  title: API de pedidos de demostración
+  version: 1.0.0
+  description: API local para validar paginación, autorización, reglas de pedidos e idempotencia con Postman.
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+paths:
+  /test/reset:
+    post:
+      summary: Restablece los datos controlados de demostración
+      description: Operación exclusiva del administrador de prueba para iniciar la colección desde un estado conocido.
+      responses:
+        '200':
+          description: Datos restablecidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders:
+    get:
+      summary: Lista los pedidos del usuario autenticado
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Página de pedidos propios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedOrders'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Crea un pedido para el usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Pedido creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /orders/{id}:
+    get:
+      summary: Consulta un pedido propio
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Pedido encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{id}/status:
+    put:
+      summary: Cambia el estado de un pedido propio de forma idempotente
+      description: Repetir la misma solicitud con el mismo estado conserva el estado final y no incrementa `statusChanges`.
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Estado aplicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: demo-token
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    BadRequest:
+      description: Parámetros o JSON inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Credenciales ausentes o inválidas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso inexistente o no accesible para el usuario
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Cuerpo válido como JSON pero incompatible con las reglas de negocio
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, ownerId, product, quantity, shippingAddress, status, statusChanges, createdAt]
+      properties:
+        id:
+          type: string
+          examples: [order-1]
+        ownerId:
+          type: string
+          examples: [alice]
+        product:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        shippingAddress:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [PENDING, PAID, CANCELLED]
+        statusChanges:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    CreateOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [product, quantity, shippingAddress]
+      properties:
+        product:
+          type: string
+          minLength: 1
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 100
+        shippingAddress:
+          type: string
+          minLength: 1
+    UpdateStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [PENDING, PAID, CANCELLED]
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [page, limit, totalItems, totalPages]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+        totalItems:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+    PagedOrders:
+      type: object
+      additionalProperties: false
+      required: [items, pagination]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+    ResetResult:
+      type: object
+      additionalProperties: false
+      required: [message, seedCount]
+      properties:
+        message:
+          type: string
+        seedCount:
+          type: integer
+          const: 3
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum: [BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, VALIDATION_ERROR]
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string

@@ -1,0 +1,20 @@
+{
+  "name": "validacion-api-postman-openapi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API de pedidos para validación con Postman y OpenAPI",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "collection": "newman run postman/orders.postman_collection.json -e postman/local.example.postman_environment.json --reporters cli,json --reporter-json-export evidence/latest-collection-result.json",
+    "versions": "node --version && npm --version && newman --version"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "newman": "^6.2.1",
+    "supertest": "^7.1.4"
+  }
+}

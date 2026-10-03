@@ -1,0 +1,238 @@
+{
+  "info": {
+    "_postman_id": "01c38a20-1e23-4f0d-867f-f832599f6adc",
+    "name": "Validación API de pedidos — TC-01 a TC-14",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "createdOrderId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "[TC-01] Restablecer datos controlados",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/test/reset"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-01] estado y esquema de restauración', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body.message).to.be.a('string');",
+        "  pm.expect(body.seedCount).to.eql(3);",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-02] Listar primera página de Alice",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }],
+        "url": "{{baseUrl}}/orders?page=1&limit=1"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-02] paginación, propiedad y esquema de éxito', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body.items).to.be.an('array').with.lengthOf(1);",
+        "  pm.expect(body.pagination).to.deep.equal({ page: 1, limit: 1, totalItems: 2, totalPages: 2 });",
+        "  pm.expect(body.items[0]).to.include({ id: 'alice-seed-001', ownerId: 'alice' });",
+        "  pm.expect(body.items[0].statusChanges).to.be.a('number');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-03] Listar segunda página de Alice",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }],
+        "url": "{{baseUrl}}/orders?page=2&limit=1"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-03] página distinta sin repetición', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body.items).to.have.lengthOf(1);",
+        "  pm.expect(body.items[0].id).to.eql('alice-seed-002');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-04] Crear pedido válido",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"product\": \"Teclado mecánico\",\n  \"quantity\": 2,\n  \"shippingAddress\": \"Zona 1, Ciudad de Guatemala\"\n}" },
+        "url": "{{baseUrl}}/orders"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-04] creación y esquema de pedido', () => {",
+        "  pm.expect(pm.response.code).to.eql(201);",
+        "  pm.expect(body.id).to.be.a('string').and.not.empty;",
+        "  pm.expect(body).to.include({ ownerId: 'alice', status: 'PENDING', statusChanges: 0 });",
+        "  pm.expect(body.quantity).to.be.a('number');",
+        "});",
+        "pm.collectionVariables.set('createdOrderId', body.id);"
+      ] } }]
+    },
+    {
+      "name": "[TC-05] Consultar pedido recién creado",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }],
+        "url": "{{baseUrl}}/orders/{{createdOrderId}}"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-05] verificación posterior de creación', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body.id).to.eql(pm.collectionVariables.get('createdOrderId'));",
+        "  pm.expect(body.product).to.eql('Teclado mecánico');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-06] Rechazar campo obligatorio ausente",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"quantity\": 1,\n  \"shippingAddress\": \"Zona 1\"\n}" },
+        "url": "{{baseUrl}}/orders"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-06] error de validación por product', () => {",
+        "  pm.expect(pm.response.code).to.eql(422);",
+        "  pm.expect(body).to.include({ error: 'VALIDATION_ERROR' });",
+        "  pm.expect(body.message).to.match(/product/i);",
+        "  pm.expect(body.details).to.be.an('array');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-07] Rechazar cantidad inválida",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"product\": \"Mouse\",\n  \"quantity\": 0,\n  \"shippingAddress\": \"Zona 1\"\n}" },
+        "url": "{{baseUrl}}/orders"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-07] error de validación por quantity', () => {",
+        "  pm.expect(pm.response.code).to.eql(422);",
+        "  pm.expect(body).to.include({ error: 'VALIDATION_ERROR' });",
+        "  pm.expect(body.message).to.match(/quantity/i);",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-08] Rechazar solicitud sin credenciales",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/orders" },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-08] 401 y esquema de error sin token', () => {",
+        "  pm.expect(pm.response.code).to.eql(401);",
+        "  pm.expect(body).to.include({ error: 'UNAUTHORIZED' });",
+        "  pm.expect(body.message).to.be.a('string');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-09] Rechazar credencial inválida",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer invalid-token" }],
+        "url": "{{baseUrl}}/orders"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-09] 401 con token inválido', () => {",
+        "  pm.expect(pm.response.code).to.eql(401);",
+        "  pm.expect(body.error).to.eql('UNAUTHORIZED');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-10] Impedir acceso de Bob a pedido de Alice",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{bobToken}}" }],
+        "url": "{{baseUrl}}/orders/alice-seed-001"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-10] recurso ajeno no se revela', () => {",
+        "  pm.expect(pm.response.code).to.eql(404);",
+        "  pm.expect(body.error).to.eql('NOT_FOUND');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-11] Informar recurso inexistente",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }],
+        "url": "{{baseUrl}}/orders/order-does-not-exist"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-11] inexistente devuelve error uniforme', () => {",
+        "  pm.expect(pm.response.code).to.eql(404);",
+        "  pm.expect(body).to.include({ error: 'NOT_FOUND' });",
+        "  pm.expect(body.message).to.be.a('string');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-12] Cambiar estado a PAID",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"status\": \"PAID\" }" },
+        "url": "{{baseUrl}}/orders/alice-seed-001/status"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-12] cambio aplicado una vez', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body).to.include({ status: 'PAID', statusChanges: 1 });",
+        "  pm.expect(body.statusChanges).to.be.a('number');",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-13] Repetir cambio idempotente",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{ \"status\": \"PAID\" }" },
+        "url": "{{baseUrl}}/orders/alice-seed-001/status"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-13] repetición no duplica el efecto', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body).to.include({ status: 'PAID', statusChanges: 1 });",
+        "});"
+      ] } }]
+    },
+    {
+      "name": "[TC-14] Verificar efecto final persistido",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{aliceToken}}" }],
+        "url": "{{baseUrl}}/orders/alice-seed-001"
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "const body = pm.response.json();",
+        "pm.test('[TC-14] estado final confirma idempotencia', () => {",
+        "  pm.expect(pm.response.code).to.eql(200);",
+        "  pm.expect(body).to.include({ status: 'PAID', statusChanges: 1 });",
+        "});"
+      ] } }]
+    }
+  ]
+}
